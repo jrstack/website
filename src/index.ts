@@ -4,9 +4,9 @@ import { StaticServer } from "./staticServer";
 import { NoServer } from "./noServer";
 import { existsSync, readFileSync } from "fs";
 
-const address = process.env["address"] || "localhost" || "0.0.0.0";
+const address = process.env["address"] || "0.0.0.0";
 const envPort = process.env["port"];
-const port = envPort ? parseInt(envPort) : 12345;
+const port = envPort ? parseInt(envPort) : 80;
 const envSslPort = process.env["sslport"];
 const sslPort = envPort ? parseInt(envPort) : 443;
 const envUseFs = process.env["usefs"];
