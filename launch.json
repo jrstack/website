@@ -1,0 +1,14 @@
+{
+    "run": {
+        "simpleServer": {
+            "relativePath": "lib/index.js",
+            "argv": [],
+            "env": {
+                "usefs": "true",
+                "staticroot": "../http_files",
+                "address": "localhost",
+                "port": "12345"
+            }
+        }
+    }
+}
