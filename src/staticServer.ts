@@ -18,12 +18,25 @@ class Counter {
     }
 }
 
+abstract class File {
+    public constructor(public readonly path: string) { }
+}
+
+class StaticFile extends File {
+}
+
+class IndexDir extends File {
+    public constructor(path: string, public readonly indexPath: string) {
+        super(path);
+    }
+}
+
 class DirectoryEnumerator {
-    private files: string[] = [];
+    private files: File[] = [];
 
     public constructor(public readonly root: string) { }
 
-    public GetFiles(cb: Action1<string[]>) {
+    public GetFiles(cb: Action1<File[]>) {
         return this.GetFilesHelper(this.root, () => cb(this.files));
     }
 
@@ -36,13 +49,19 @@ class DirectoryEnumerator {
                 if (stat.isDirectory()) {
                     return fs.readdir(current, (err2, localFiles) => {
                         if (!err) {
-                            const counter = new Counter(localFiles.length, doneCb);
+                            const counter = new Counter(localFiles.length, () => {
+                                const index = this.files.find(f => f instanceof StaticFile && f.path === path.join(current, "index.html"));
+                                if (index) {
+                                    this.files.push(new IndexDir(index.path, current));
+                                }
+                                doneCb();
+                            });
                             return localFiles.forEach(lf => this.GetFilesHelper(path.join(current, lf), () => counter.Add()));
                         }
                         doneCb();
                     });
                 } else if (stat.isFile()) {
-                    this.files.push(current);
+                    this.files.push(new StaticFile(current));
                 }
             }
             doneCb();
@@ -70,8 +89,10 @@ class FileList {
         newList.GetFiles(list => {
             const newFiles: StringMap<string> = {};
             const newPublicFiles: StringMap<string> = {};
-            list.forEach(fullPath => {
-                const lookup = "/" + path.relative(this.root, fullPath).toLowerCase();
+            list.forEach(file => {
+                const fullPath = file.path;
+                const pathToUse = file instanceof IndexDir ? file.indexPath : file.path;
+                const lookup = "/" + path.relative(this.root, pathToUse).toLowerCase();
                 newPublicFiles[lookup] = path.relative(this.cwd, fullPath);
                 newFiles[lookup] = fullPath;
             });
