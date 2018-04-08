@@ -1,0 +1,13 @@
+{
+    "index.html": null,
+    "test": null,
+    "dir1": {
+        "dir2": {
+            "test2": null
+        },
+        "test3": null,
+        "../": {
+            "badness": null
+        }
+    }
+}

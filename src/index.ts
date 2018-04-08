@@ -3,6 +3,7 @@ import { SimpleServer } from "./simpleServer";
 import { StaticServer } from "./staticServer";
 import { NoServer } from "./noServer";
 import { existsSync, readFileSync } from "fs";
+import { AzureStorageServer } from "./azureStorageServer";
 
 const address = process.env["address"] || "0.0.0.0";
 const envPort = process.env["port"];
@@ -29,7 +30,8 @@ const fullRootPath = join(cwd, staticRootPath);
 
 console.log("UseFS", useFs, fullRootPath, cwd);
 
-const s = useFs ? new StaticServer(fullRootPath, cwd) : NoServer();
+let s = useFs ? new StaticServer(fullRootPath, cwd) : NoServer();
+s = new AzureStorageServer("https://jrstackjess.blob.core.windows.net/test/config.json");
 
 const getOpts = () => {
     if (existsSync(privPath) && existsSync(certPath)) {

@@ -19,6 +19,7 @@
   "homepage": "https://github.com/jrstack/website#readme",
   "dependencies": {
     "@jrstack/bootstrapper": "^0.1.0",
+    "@jrstack/http-request": "0.0.4",
     "@jrstack/ts-build": "^2.7.2-1"
   }
 }
