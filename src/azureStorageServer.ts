@@ -1,33 +1,30 @@
 import { makeRequest, PromiseRes } from "@jrstack/http-request";
-import { IRequestServer, IncomingMessage, ServerResponse, IRequestServerOptions } from "./httpTypes";
-import { Action } from "../types/types";
-import { StringMap } from "@jrstack/http-request/types/types";
+import { StringMap } from "../types/types";
 import * as url from "url";
+import * as T from "./utils/refreshableHelper";
+import { PassThrough } from "stream";
 
 let log = console.log;
 //log = () => {};
 
-interface IEntry {
-    dir: string;
-    entries: string | IEntry[];
-};
-
-interface IEntry2 {
-    [k: string]: IEntry2;
-}
-
 const etagHeader = "etag";
 
-class Entry2 {
+class AzureEntry implements T.Entry {
     private lastEtag: string;
     private contents: string;
     private valid = false;
     private updating = false;
 
-    public constructor(public readonly path: string) {}
+    public constructor(public readonly path: string, public readonly safePath: string) {}
 
-    public getContents() {
-        return this.contents;
+    public getStream() {
+        const stream = new PassThrough();
+        setImmediate(() => stream.end(this.contents));
+        return stream;
+    }
+
+    public isValid() {
+        return this.valid;
     }
 
     public async update() {
@@ -60,72 +57,68 @@ class Entry2 {
 
 class EntryManager {
     private lastConfigEtag: string;
-    private readonly lookupHistory: StringMap<Entry2> = {};
-    private lookup: StringMap<Entry2> = {};
+    private lookup: StringMap<AzureEntry> = {};
+    private readonly lookupHistory: StringMap<AzureEntry> = {};
     private readonly base: string;
-    private static poison = new Entry2(null);
-    private updating = false;
 
     public constructor(public readonly storageUrl: string) {
         const parsed = url.parse(storageUrl);
         this.base = parsed.pathname && storageUrl.substring(0, storageUrl.lastIndexOf("/"));
         if (!this.base) throw new Error("Unable to parse storage url " + storageUrl);
         log(storageUrl, parsed, this.base);
-        this.update();
     }
 
-    public async update() {
-        try {
-            this.updating = true;
-            try {
-                log("Updating manager");
-                const configHead = await makeRequest("HEAD", this.storageUrl);
-                const newEtag = configHead.headers[etagHeader] as string;
-                if (newEtag && newEtag !== this.lastConfigEtag) {
-                    const configGet = await makeRequest<any>("GET", this.storageUrl);
-                    const newLookup: StringMap<Entry2> = {};
-                    const parse = (base: string, obj: any) => {
-                        if (!obj) return;
-                        Object.keys(obj).forEach(k => {
-                            const valid = EntryManager.stringIfValid(k);
-                            if (valid === false) return;
-                            const sensitiveLookup = `${base}/${valid}`;
-                            const path = `${this.base}${sensitiveLookup}`;
-                            const lookup = sensitiveLookup.toLowerCase();
-                            const objk = obj[k];
-                            if (!objk) {
-                                if (!(lookup in newLookup)) {
-                                    if (lookup in this.lookupHistory) {
-                                        newLookup[lookup] = this.lookupHistory[lookup];
-                                    } else {
-                                        this.lookupHistory[lookup] = newLookup[lookup] = new Entry2(path);
-                                    }
-                                } else {
-                                    newLookup[lookup] = EntryManager.poison;
-                                }
-                            } else if (typeof objk === "object") {
-                                parse(sensitiveLookup, objk);
-                            }
-                        });
-                    };
-                    parse("", configGet.response);
+    private async updateEntriesTo(newLookup: StringMap<AzureEntry>) {
+        const promises = Object.keys(newLookup).map(async k => {
+            const entry = newLookup[k]
+            await newLookup[k].update();
+            if (!entry.isValid()) {
+                delete newLookup[k];
+            }
+        });
+        await Promise.all(promises);
+        return this.lookup = newLookup;
+    }
 
-                    const promises = Object.keys(newLookup).map(k => newLookup[k].update());
-                    await Promise.all(promises).then(() => this.lookup = newLookup);
-                    return;
-                }
-            } catch (e) {
-                log("Error updating", e);
+    public async getEntries() {
+        try {
+            log("Updating manager");
+            const configHead = await makeRequest("HEAD", this.storageUrl);
+            const newEtag = configHead.headers[etagHeader] as string;
+            if (newEtag && newEtag !== this.lastConfigEtag) {
+                const configGet = await makeRequest<any>("GET", this.storageUrl);
+                const newLookup: StringMap<AzureEntry> = {};
+                const parse = (base: string, obj: any) => {
+                    if (!obj || typeof obj !== "object") return;
+                    Object.keys(obj).forEach(k => {
+                        const valid = EntryManager.stringIfValid(k);
+                        if (valid === false) return;
+                        const sensitiveLookup = `${base}/${valid}`;
+                        const path = `${this.base}${sensitiveLookup}`;
+                        const safePath = `storage:/${sensitiveLookup}`;
+                        const lookup = sensitiveLookup;
+                        const objk = obj[k];
+                        if (!objk) {
+                            if (lookup in this.lookupHistory) {
+                                newLookup[lookup] = this.lookupHistory[lookup];
+                            } else {
+                                this.lookupHistory[lookup] = newLookup[lookup] = new AzureEntry(path, safePath);
+                            }
+                        } else if (typeof objk === "object") {
+                            parse(sensitiveLookup, objk);
+                        }
+                    });
+                };
+                parse("", configGet.response);
+                return await this.updateEntriesTo(newLookup);
             }
-            try {
-                await Promise.all(Object.keys(this.lookup).map(k => this.lookup[k].update()));
-            } catch (e) {
-                log("Error updating2", e);
-            }
-        } catch (e3) {
-            log("Error updating3", e3);
-        } finally {
-            this.updating = false;
+        } catch (e) {
+            log("Error updating", e);
+        }
+        try {
+            return await this.updateEntriesTo(this.lookup);
+        } catch (e) {
+            log("Error updating2", e);
         }
     }
 
@@ -135,28 +128,10 @@ class EntryManager {
         if (dir.length <= 0 || dir.startsWith(".") || dir.indexOf("/") >= 0) return false;
         return dir;
     }
-
-    public getContent(lookup: string) {
-        log("get", lookup, this.lookup);
-        const have = this.lookup[(lookup || "").toLowerCase()];
-        return have && have.getContents();
-    }
 }
 
-export class AzureStorageServer implements IRequestServer {
-    private manager = new EntryManager(this.storageUrl);
+export class AzureStorageServer extends T.RefreshableHelper {
     public constructor(public readonly storageUrl: string) {
-
-    }
-    serveRequest(request: IncomingMessage, response: ServerResponse, options?: Partial<IRequestServerOptions>): boolean {
-        const key = request.url.toLowerCase();
-        log("Trying to serve: ", key);
-        const contents = this.manager.getContent(key.trim());
-        if (contents) {
-            response.writeHead(200, "OK");
-            response.end(contents);
-            return true;
-        }
-        return false;
+        super("/api/azure", new EntryManager(storageUrl));
     }
 }

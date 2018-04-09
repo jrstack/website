@@ -5,7 +5,7 @@ export declare interface IRequestServerOptions {
 }
 
 export declare interface IRequestServer {
-    serveRequest(request: IncomingMessage, response: ServerResponse, options?: Partial<IRequestServerOptions>): boolean;
+    serveRequest(url: string, request: IncomingMessage, response: ServerResponse, options?: Partial<IRequestServerOptions>): boolean;
 }
 
 export { IncomingMessage, ServerResponse }

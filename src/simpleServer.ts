@@ -27,11 +27,20 @@ const nfs = NotFoundServer();
 export class SimpleServer {
     private readonly _servers: (SslServer | NonSslServer)[] = [];
 
-    public constructor(private readonly _otherServer: IRequestServer, private readonly _hostname: string, private readonly _ports: number[], sslOptions: ServerOptions) {
+    public constructor(private readonly _otherServer: IRequestServer[], private readonly _hostname: string, private readonly _ports: number[], sslOptions: ServerOptions) {
         this._servers.push(createNonSslServer(this._getHandler(false).bind(this)));
         if (sslOptions) {
             this._servers.push(createSslServer(sslOptions, this._getHandler(true).bind(this)));
         }
+    }
+
+    private _handleOthers(url: string, request: IncomingMessage, response: ServerResponse) {
+        for (let i = 0; i < this._otherServer.length; ++i) {
+            const server = this._otherServer[i];
+            if (server.serveRequest.apply(server, arguments) !== false)
+                return true;
+        }
+        return false;
     }
 
     private _getHandler(ssl: boolean) {
@@ -39,19 +48,20 @@ export class SimpleServer {
         serverLog("GettingHandler", secureStr);
         return (request: IncomingMessage, response: ServerResponse) => {
             try {
+                const url = request.url.trim().toLowerCase();
                 const incomingIp = request.connection.remoteAddress;
 
                 serverLog("IncomingRequest", `Serving request on ${secureStr} port ${request.connection.localPort} for ${request.url} from ${incomingIp}`);
-                if (request.url === "/") {
+                if (url === "/" && url.indexOf("/") === 1) {
                     serverLog("Serving", "home page");
                     response.writeHead(200, "OK");
                     return response.end(home);
-                } else if (request.url === "/crash") {
+                } else if (url === "/crash") {
                     throw new Error("Crashing");
-                } else if (this._otherServer.serveRequest(request, response)) {
+                } else if (this._handleOthers(url, request, response)) {
                     serverLog("Served", request.url);
                     return;
-                } else if (nfs.serveRequest(request, response)) {
+                } else if (nfs.serveRequest(url, request, response)) {
                     serverLog("Not found", request.url);
                     return;
                 }

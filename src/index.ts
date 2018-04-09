@@ -10,6 +10,10 @@ const envPort = process.env["port"];
 const port = envPort ? parseInt(envPort) : 80;
 const envSslPort = process.env["sslport"];
 const sslPort = envSslPort ? parseInt(envSslPort) : 443;
+const envAzureRootPath = process.env["azureroot"];
+const azureRootPath = typeof envAzureRootPath === typeof "" ? envAzureRootPath : null;
+const envUseAzure = typeof azureRootPath === typeof "" && process.env["useazure"];
+const useAzure = typeof envUseAzure === typeof "" ? (envUseAzure.toLowerCase() === "true") : false;
 const envUseFs = process.env["usefs"];
 const useFs = typeof envUseFs === typeof "" ? (envUseFs.toLowerCase() === "true") : false;
 const envStaticRootPath = process.env["staticroot"];
@@ -29,9 +33,12 @@ cwdType === (typeof (() => {})) ? process.cwd()
 const fullRootPath = join(cwd, staticRootPath);
 
 console.log("UseFS", useFs, fullRootPath, cwd);
+console.log("UseAzure", useAzure, azureRootPath);
 
-let s = useFs ? new StaticServer(fullRootPath, cwd) : NoServer();
-s = new AzureStorageServer("https://jrstackjess.blob.core.windows.net/test/config.json");
+let servers = [
+    useFs ? new StaticServer(fullRootPath, cwd) : NoServer(),
+    useAzure ? new AzureStorageServer(azureRootPath) : NoServer(),
+];
 
 const getOpts = () => {
     if (existsSync(privPath) && existsSync(certPath)) {
@@ -45,7 +52,7 @@ const getOpts = () => {
     return null;
 }
 
-const server = new SimpleServer(s, address, [port, sslPort], getOpts());
+const server = new SimpleServer(servers, address, [port, sslPort], getOpts());
 
 let stopping = false;
 process.on("SIGINT", async () => {
