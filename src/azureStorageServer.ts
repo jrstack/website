@@ -5,7 +5,7 @@ import * as T from "./utils/refreshableHelper";
 import { PassThrough } from "stream";
 
 let log = console.log;
-//log = () => {};
+log = () => {};
 
 const etagHeader = "etag";
 

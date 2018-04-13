@@ -45,6 +45,8 @@ export class RefreshableHelper implements IRequestServer {
             Object.keys(newEntries).forEach(k => {
                 const entry = newEntries[k];
                 const normalizedK = k.trim().toLowerCase();
+                if (normalizedK.includes("/."))
+                    return;
                 if (normalizedK.endsWith("/index.html"))
                     indexable.push(normalizedK);
                 if (!(normalizedK in managedEntries)) {

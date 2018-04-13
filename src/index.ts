@@ -36,8 +36,8 @@ console.log("UseFS", useFs, fullRootPath, cwd);
 console.log("UseAzure", useAzure, azureRootPath);
 
 let servers = [
-    useFs ? new StaticServer(fullRootPath, cwd) : NoServer(),
     useAzure ? new AzureStorageServer(azureRootPath) : NoServer(),
+    useFs ? new StaticServer(fullRootPath, cwd) : NoServer(),
 ];
 
 const getOpts = () => {

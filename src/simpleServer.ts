@@ -52,7 +52,7 @@ export class SimpleServer {
                 const incomingIp = request.connection.remoteAddress;
 
                 serverLog("IncomingRequest", `Serving request on ${secureStr} port ${request.connection.localPort} for ${request.url} from ${incomingIp}`);
-                if (url === "/" && url.indexOf("/") === 1) {
+                if (url === "/") {
                     serverLog("Serving", "home page");
                     response.writeHead(200, "OK");
                     return response.end(home);
