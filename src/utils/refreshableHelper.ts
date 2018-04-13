@@ -78,7 +78,8 @@ export class RefreshableHelper implements IRequestServer {
     serveRequest(url: string, request: IncomingMessage, response: ServerResponse, options?: Partial<IRequestServerOptions>): boolean {
         if (url === this.refreshEndpoint) {
             response.writeHead(200, "OK");
-            response.end("Refreshing...");
+            response.write("Refreshing...");
+            this.refresh().then(() => response.end("Refreshed!"), () => response.end("Failed to refresh :("));
             return true;
         } else if (!request.method || request.method.toLowerCase() !== "get") {
             return false;
